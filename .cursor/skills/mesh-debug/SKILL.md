@@ -132,18 +132,17 @@ curl -s http://localhost/api/local | python3 -m json.tool
 ### 7. Alfred & Node Manager
 
 ```bash
-# Read Alfred data store (type 65 = mesh node status)
-alfred -r 65
-
-# Node manager journal (IP allocation, registry updates)
+# Node manager journal (IP allocation, registry updates, ACS elections)
 journalctl -u node-manager --no-pager -n 40
 
 # Mesh registry (decoded peer data)
 cat /var/run/mesh_node_registry
 
 # Which node-manager mode is running (ACS vs static)
-readlink -f /usr/local/bin/node-manager.sh
+grep -i '^acs=' /etc/mesh.conf
 ```
+
+`node-manager` no longer uses `alfred` for status gossip at all (confirmed via `strings` on the binary — zero references) — `alfred -r 65` returns nothing and isn't a useful check. Use the web status API instead (see §6) for live topology/node state. There is also no `node-manager.sh` wrapper script — `node-manager` is a single Go binary, and mode is controlled entirely by `acs=` in `/etc/mesh.conf` (see `.cursor/rules/manet-project.mdc`).
 
 ### 8. Service Status
 
@@ -227,7 +226,7 @@ dmesg | grep -iE 'morse|wifi|wlan|bat0|mesh|mt7915|brcmfmac' | tail -30
 ### No IPv4 on br0
 
 **Symptom**: Node has no 10.x.x.x address.
-**Check**: `journalctl -u node-manager` — look for IP allocation errors. Verify Alfred is running and peers are visible (`alfred -r 65`).
+**Check**: `journalctl -u node-manager` — look for IP allocation errors. Verify peers are visible via `curl -s http://localhost/api/data` (see §6).
 
 ### AP not broadcasting
 

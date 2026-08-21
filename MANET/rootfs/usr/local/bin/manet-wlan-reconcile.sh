@@ -72,19 +72,24 @@ CHANGED=0
 #        below (and every other consumer of these files) sees it as mesh.
 #
 #        Confirmed live: the caller (manet-ctrl's api.go) stops hostapd
-#        before invoking this script on the wired/none path, but this
-#        script must not depend on that ordering — a stray direct
-#        invocation, a future caller, or any race between the two leaves
-#        hostapd and the freshly-(re)enabled wpa_supplicant@<iface> both
-#        bound to the same radio, which killed a just-established mesh
-#        peering outright (`Mesh MPM: failed to send peering frame`).
-#        So stop+disable hostapd here ourselves whenever it's still
-#        actively configured for the interface being reclaimed, before
-#        step 1 re-enables wpa_supplicant on it.
+#        (but does not disable it) before invoking this script on the
+#        wired/none path, but this script must not depend on that
+#        ordering — a stray direct invocation, a future caller, or any
+#        race between the two leaves hostapd and the freshly-(re)enabled
+#        wpa_supplicant@<iface> both bound to the same radio, which
+#        killed a just-established mesh peering outright (`Mesh MPM:
+#        failed to send peering frame`). So stop+disable hostapd here
+#        ourselves whenever it's still configured for the interface
+#        being reclaimed, before step 1 re-enables wpa_supplicant on it.
+#        Checking is-enabled as well as is-active matters precisely
+#        because the caller's own prior stop (above) leaves it inactive
+#        but still enabled -- an is-active-only guard would skip the
+#        disable in that exact, normal case and let hostapd come back on
+#        the next reboot despite eud=wired/none.
 if { [ "$EUD" = "wired" ] || [ "$EUD" = "none" ]; } && [ -n "$AP_INTERFACE" ]; then
     echo "manet-wlan-reconcile: eud=$EUD, reclassifying former AP interface $AP_INTERFACE as mesh"
     if [ "$(grep '^interface=' /etc/hostapd/hostapd.conf 2>/dev/null | cut -d= -f2-)" = "$AP_INTERFACE" ] \
-        && systemctl is-active --quiet hostapd.service; then
+        && { systemctl is-active --quiet hostapd.service || systemctl is-enabled --quiet hostapd.service; }; then
         echo "manet-wlan-reconcile: stopping hostapd (still bound to $AP_INTERFACE)"
         systemctl disable --now hostapd.service 2>/dev/null || true
     fi

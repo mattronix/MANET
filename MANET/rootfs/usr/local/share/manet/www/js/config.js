@@ -107,10 +107,15 @@ function configRenderView(panel, cfg) {
     ]},
     { title: 'GPS / CoT', fields: [
       { label: 'GPS Enabled', key: 'gps', fmt: function(v) { return (v||'').toLowerCase() === 'n' ? 'Disabled' : 'Enabled'; } },
+      { label: 'GPS Source', key: 'gps_source', fmt: function(v) { return v === 'static' ? 'Static (fixed location)' : 'Receiver (hardware GPS)'; },
+        showIf: [{key:'gps', equals:'y'}] },
+      { label: 'Latitude', key: 'gps_static_lat', showIf: [{key:'gps', equals:'y'}, {key:'gps_source', equals:'static'}] },
+      { label: 'Longitude', key: 'gps_static_lon', showIf: [{key:'gps', equals:'y'}, {key:'gps_source', equals:'static'}] },
+      { label: 'Altitude', key: 'gps_static_alt', showIf: [{key:'gps', equals:'y'}, {key:'gps_source', equals:'static'}] },
       { label: 'Callsign', key: 'callsign' },
       { label: 'CoT Type', key: 'cot_type', fmt: function(v) { return v || 'a-f-G-E (equipment, default)'; } },
       { label: 'CoT Team', key: 'cot_team', fmt: function(v) { return v || '(none — equipment identity)'; } },
-      { label: 'CoT Role', key: 'cot_role', fmt: function(v) { return v || 'Team Member'; } },
+      { label: 'CoT Role', key: 'cot_role', fmt: function(v) { return v || 'Team Member'; }, showIf: [{key:'cot_team', notEmpty:true}] },
       { label: 'CoT Icon', key: 'cot_icon', fmt: function(v) { return v || '(default for type)'; } },
     ]},
     { title: 'Access Point', fields: [
@@ -152,6 +157,10 @@ function configRenderView(panel, cfg) {
   sections.forEach(sec => {
     html += '<div class="card cfg-section"><div class="cfg-section-title">' + sec.title + '</div>';
     sec.fields.forEach(f => {
+      if (f.showIf && !f.showIf.every(cond => {
+        const v = cfg[cond.key] || '';
+        return cond.notEmpty ? v !== '' : v === cond.equals;
+      })) return;
       let val;
       if (f.voiceKey) {
         val = (configVoiceData && configVoiceData[f.voiceKey]) || f.fallback || '--';
@@ -206,10 +215,27 @@ function configRenderEdit(panel, cfg) {
     { section: 'GPS / CoT' },
     { label: 'GPS Enabled', key: 'gps', type: 'select', options: [{v:'y',l:'Yes'},{v:'n',l:'No'}],
       hint: 'No on hardware with no GPS module — stops gpsd/gps-reader instead of leaving them polling for a fix that will never come.' },
+    { label: 'GPS Source', key: 'gps_source', type: 'select', options: [
+        {v:'receiver',l:'Receiver (hardware GPS)'},{v:'static',l:'Static (fixed location)'}
+      ], hint: 'Static reports a fixed position with no GPS module needed — e.g. a stationary gateway node.',
+      showIf: [{key:'gps', equals:'y'}] },
+    { label: 'Latitude', key: 'gps_static_lat', type: 'text', hint: 'Decimal degrees, e.g. 52.859337',
+      showIf: [{key:'gps', equals:'y'}, {key:'gps_source', equals:'static'}] },
+    { label: 'Longitude', key: 'gps_static_lon', type: 'text', hint: 'Decimal degrees, e.g. 6.513487',
+      showIf: [{key:'gps', equals:'y'}, {key:'gps_source', equals:'static'}] },
+    { label: 'Altitude', key: 'gps_static_alt', type: 'text', hint: 'Meters above sea level',
+      showIf: [{key:'gps', equals:'y'}, {key:'gps_source', equals:'static'}] },
     { label: 'Callsign', key: 'callsign', type: 'text', hint: 'Blank = hostname' },
     { label: 'CoT Type', key: 'cot_type', type: 'text', hint: 'Blank = a-f-G-E (equipment, no team). CoT/2525 type code.' },
-    { label: 'CoT Team', key: 'cot_team', type: 'text', hint: 'Blank = no team affiliation shown. Set to give this node a team-member identity instead.' },
-    { label: 'CoT Role', key: 'cot_role', type: 'text', hint: 'Blank = Team Member. Only shown when CoT Team is set.' },
+    { label: 'CoT Team', key: 'cot_team', type: 'select', options: [
+        {v:'',l:'No affiliation'},
+        {v:'White',l:'White'},{v:'Yellow',l:'Yellow'},{v:'Orange',l:'Orange'},{v:'Magenta',l:'Magenta'},
+        {v:'Red',l:'Red'},{v:'Maroon',l:'Maroon'},{v:'Purple',l:'Purple'},{v:'Dark Blue',l:'Dark Blue'},
+        {v:'Blue',l:'Blue'},{v:'Cyan',l:'Cyan'},{v:'Teal',l:'Teal'},{v:'Green',l:'Green'},
+        {v:'Dark Green',l:'Dark Green'},{v:'Brown',l:'Brown'}
+      ], hint: 'ATAK team-color affiliation. No affiliation = shown as equipment, no team.' },
+    { label: 'CoT Role', key: 'cot_role', type: 'text', hint: 'Blank = Team Member.',
+      showIf: [{key:'cot_team', notEmpty:true}] },
     { label: 'CoT Icon', key: 'cot_icon', type: 'text', hint: 'Blank = default icon for the type. Optional iconset path override.' },
     { section: 'Access Point' },
     { label: 'EUD Mode', key: 'eud', type: 'select', options: ['wired', 'wireless', 'both', 'auto', 'none'] },
@@ -273,7 +299,7 @@ function configRenderEdit(panel, cfg) {
       return;
     }
     const curVal = f.voiceKey ? ((configVoiceData && configVoiceData[f.voiceKey]) || f.fallback || '') : (cfg[f.key] || '');
-    html += '<div class="cfg-row"><div class="cfg-label">' + f.label;
+    html += '<div class="cfg-row" id="cfg-row-' + f.key + '"><div class="cfg-label">' + f.label;
     if (f.hint) html += '<span class="hint">' + f.hint + '</span>';
     html += '</div>';
     if (f.type === 'select') {
@@ -304,6 +330,35 @@ function configRenderEdit(panel, cfg) {
   html += '</div></div>';
   panel.innerHTML = html;
 
+  // Dynamic show/hide: a field with `showIf` (an array of conditions,
+  // ANDed together — each either {key, equals} for an exact match or
+  // {key, notEmpty:true} for "has any value") only shows its row once
+  // every referenced control currently satisfies its condition.
+  // Re-evaluated whenever any controlling field changes, so e.g. picking
+  // GPS Source = Static reveals the latitude/longitude/altitude rows, or
+  // picking a CoT Team reveals CoT Role, without a page reload.
+  function configApplyShowIf() {
+    fields.forEach(f => {
+      if (!f.showIf) return;
+      const row = document.getElementById('cfg-row-' + f.key);
+      if (!row) return;
+      const visible = f.showIf.every(cond => {
+        const el = document.getElementById('cfg-f-' + cond.key);
+        if (!el) return false;
+        if (cond.notEmpty) return el.value !== '';
+        return el.value === cond.equals;
+      });
+      row.style.display = visible ? '' : 'none';
+    });
+  }
+  const showIfControllers = new Set();
+  fields.forEach(f => { if (f.showIf) f.showIf.forEach(cond => showIfControllers.add(cond.key)); });
+  showIfControllers.forEach(key => {
+    const el = document.getElementById('cfg-f-' + key);
+    if (el) el.addEventListener('change', configApplyShowIf);
+  });
+  configApplyShowIf();
+
   document.getElementById('cfg-back-btn').addEventListener('click', () => {
     configEditing = false;
     configFetch();
@@ -332,11 +387,27 @@ function configRenderEdit(panel, cfg) {
 }
 
 async function configSave() {
+  const panel = document.getElementById('cfg-content');
+  const saveBtn = document.getElementById('cfg-save-btn');
+  const backBtn = document.getElementById('cfg-back-btn');
+  const savedBtnText = saveBtn.textContent;
+  saveBtn.disabled = true;
+  saveBtn.textContent = 'Saving…';
+  if (backBtn) backBtn.disabled = true;
+  panel.querySelectorAll('.cfg-input').forEach(el => { el.disabled = true; });
+
+  function restoreEditable() {
+    saveBtn.disabled = false;
+    saveBtn.textContent = savedBtnText;
+    if (backBtn) backBtn.disabled = false;
+    panel.querySelectorAll('.cfg-input').forEach(el => { el.disabled = false; });
+  }
+
   const meshFields = ['node_hostname','eud','lan_ap_ssid','lan_ap_key','lan_ap_channel','lan_ap_bw','max_euds_per_node','eud_bandwidth','mesh_ssid','mesh_key',
     'ipv4_network','regulatory_domain','halow_bw','multicast_mode','battery_monitor','admin_password','require_auth',
     'gateway','gateway_nat','gateway_mss_clamp','gateway_bandwidth','dns_servers',
     'auto_update','update_url',
-    'gps','callsign','cot_type','cot_team','cot_role','cot_icon',
+    'gps','gps_source','gps_static_lat','gps_static_lon','gps_static_alt','callsign','cot_type','cot_team','cot_role','cot_icon',
     'voice_mic_volume','voice_speaker_volume','voice_channel',
     'voice_beep_tx_start','voice_beep_rx_end','voice_gain','voice_enabled'];
   const config = {};
@@ -373,8 +444,12 @@ async function configSave() {
       if (!meshResult.ok) errors.push('Mesh: ' + (meshResult.error || 'unknown'));
       if (!voiceResult.ok) errors.push('Voice: ' + (voiceResult.error || 'unknown'));
       notify('Save Failed', errors.join(', '), {type:'error'});
+      restoreEditable();
     }
-  } catch(e) { notify('Save Failed', e.message, {type:'error'}); }
+  } catch(e) {
+    notify('Save Failed', e.message, {type:'error'});
+    restoreEditable();
+  }
 }
 
 // QOS Priority

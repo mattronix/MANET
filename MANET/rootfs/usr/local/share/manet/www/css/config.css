@@ -36,6 +36,7 @@
   font-size: 12px; padding: 5px 8px;
 }
 .cfg-input:focus { outline: none; border-color: var(--accent2); }
+.cfg-input:disabled { opacity: 0.5; cursor: not-allowed; }
 .cfg-range-wrap { flex: 1; display: flex; align-items: center; gap: 10px; }
 .cfg-range { flex: 1; accent-color: var(--accent2); cursor: pointer; }
 .cfg-range-val { font-size: 12px; font-weight: 600; color: var(--text); min-width: 36px; text-align: right; }

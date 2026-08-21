@@ -590,6 +590,17 @@ func getGatewayInfo() (string, string) {
 const gpsTimeout = 5 * time.Second
 
 func getGPS() (string, string, string) {
+	conf := loadKV(confFile)
+	if conf["gps"] == "n" {
+		return "", "", ""
+	}
+	if conf["gps_source"] == "static" {
+		// No receiver to query — report the configured fixed position
+		// directly, so peers gossiped this node's registry entry see the
+		// same static location gps-reader is writing locally.
+		return conf["gps_static_lat"], conf["gps_static_lon"], conf["gps_static_alt"]
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), gpsTimeout)
 	defer cancel()
 	out, err := exec.CommandContext(ctx, "gpspipe", "-w", "-n", "5").Output()

@@ -118,7 +118,7 @@ func fleetApplyConfig(pkg map[string]interface{}) {
 	if updates["gateway"] != "" || updates["gateway_nat"] != "" || updates["gateway_mss_clamp"] != "" || updates["gateway_bandwidth"] != "" {
 		runCmd(5*time.Second, "systemctl", "reload", "gateway-manager")
 	}
-	if updates["lan_ap_ssid"] != "" || updates["lan_ap_key"] != "" {
+	if (updates["lan_ap_ssid"] != "" || updates["lan_ap_key"] != "") && eudWantsAP(conf["eud"]) {
 		applyHostapdConfig(conf)
 		runCmd(10*time.Second, "systemctl", "restart", "hostapd")
 	}
@@ -148,7 +148,7 @@ func fleetApplyConfig(pkg map[string]interface{}) {
 	if updates["dns_servers"] != "" {
 		applyDNSServers(updates["dns_servers"])
 	}
-	if updates["lan_ap_channel"] != "" || updates["lan_ap_bw"] != "" {
+	if (updates["lan_ap_channel"] != "" || updates["lan_ap_bw"] != "") && eudWantsAP(conf["eud"]) {
 		runCmd(10*time.Second, "systemctl", "restart", "hostapd")
 	}
 	if updates["qos_enabled"] != "" || updates["qos_voice_band"] != "" || updates["qos_cot_band"] != "" || updates["qos_chat_band"] != "" {

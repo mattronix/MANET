@@ -129,6 +129,16 @@ func assembleAdminStatus() AdminStatus {
 		"voice_beep_tx_start":  confGet(conf, "voice_beep_tx_start", "y"),
 		"voice_beep_rx_end":    confGet(conf, "voice_beep_rx_end", "y"),
 		"voice_gain":           confGet(conf, "voice_gain", "3.0"),
+		"gps":                  confGet(conf, "gps", "y"),
+		"gps_source":           confGet(conf, "gps_source", "receiver"),
+		"gps_static_lat":       conf["gps_static_lat"],
+		"gps_static_lon":       conf["gps_static_lon"],
+		"gps_static_alt":       conf["gps_static_alt"],
+		"callsign":             conf["callsign"],
+		"cot_type":             conf["cot_type"],
+		"cot_team":             conf["cot_team"],
+		"cot_role":             conf["cot_role"],
+		"cot_icon":             conf["cot_icon"],
 	}
 
 	if currentConfig["halow_bw"] == "" {

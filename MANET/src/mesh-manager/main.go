@@ -672,13 +672,23 @@ func updateMeshDNS() {
 	nodes := parseRegistry()
 	myIP := getLocalBr0IP()
 
+	// Sort by id: map iteration order is randomized, and an unsorted block
+	// would defeat the change-gate below by "changing" on every call even
+	// when the node set is identical (same fix as updateHosts above).
+	ids := make([]string, 0, len(nodes))
+	for id := range nodes {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+
 	var b strings.Builder
 	b.WriteString("# Auto-generated mesh DNS records\n")
 	b.WriteString("local=/mesh/\n")
 
 	b.WriteString(fmt.Sprintf("address=/radio.mesh/%s\n", myIP))
 
-	for _, n := range nodes {
+	for _, id := range ids {
+		n := nodes[id]
 		if n.Hostname != "" && n.IP != "" {
 			b.WriteString(fmt.Sprintf("address=/%s.mesh/%s\n", n.Hostname, n.IP))
 		}
