@@ -145,6 +145,8 @@ cat /var/run/mesh_node_registry
 readlink -f /usr/local/bin/node-manager.sh
 ```
 
+**`alfred` is NOT dead weight — don't stop it.** A separate binary, `mesh-registry` (`src/mesh-registry/main.go`), is what populates `/var/run/mesh_node_registry`, and it depends on `alfred` completely: it shells out to `alfred -s 68` to publish this node's status and `alfred -r 68` to read peers. Note the data type is `68`, not `65`. If `alfred.service` is stopped on a node, `mesh-registry` keeps running but every publish fails (`journalctl -u mesh-registry` shows `alfred publish: exit status 255: can't connect to unix socket: Connection refused` on a ~15s loop), the node silently drops out of every other node's registry within a few minutes (see `offlineMaxAge`/stale-purge logic in `main.go`), and it stays missing until `alfred` is restarted — even though the node is fully reachable over the mesh (batman-adv/SSH) the whole time. Found live on EUD1 on 2026-08-25: `alfred` had been stopped since first boot (2026-08-17) with no crash and no restart, `mesh-registry` had been failing silently for over a week, and nothing alerted on it. `systemctl restart alfred` on the affected node fixes it immediately.
+
 ### 8. Service Status
 
 ```bash
