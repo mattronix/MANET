@@ -320,7 +320,7 @@ IPv6Token=eui64
 IPv6PrivacyExtensions=no
 
 [Link]
-MTUBytes=1500
+MTUBytes=1400
 EOF
 
 # The bridge br0 is the main interface for the mesh node
@@ -352,7 +352,7 @@ Type=multicast
 
 [Link]
 RequiredForOnline=no
-MTUBytes=1500
+MTUBytes=1400
 EOF
 
 #stop other interfaces from doing multicast dns, trim down network chatter
