@@ -43,6 +43,8 @@ MANET/src/gateway-manager/bin/
 # Android build artifacts
 MANET/src/mesh-ctrl-android/.gradle/
 MANET/src/mesh-ctrl-android/app/build/
+# build-apk.sh scratch copy; tracked artifact lives in rootfs www/assets/
+MANET/src/mesh-ctrl-android/mesh-ctrl.apk
 
 # Provisioning scratch
 MANET/provisioning/.image-cache/
