@@ -1690,24 +1690,74 @@ still-open items from the 2026-08-28 pass this supersedes.
       argument below doesn't cover that case. Needs the full hardware
       test pass below, plus these new cases this re-implementation pass
       specifically targets:**
-      - Simultaneous power-cycle of the whole reachable mesh (not
-        sequential) — the actual untested scenario. Confirm every node
-        converges on the *same* channel within one or two cycles instead
-        of each independently picking its own local-noise-best channel.
-      - A converged 2-node mesh where one node reboots: confirm the
-        *other*, still-up node never routes into `electColdStart` (it's
-        not at the lobby frequency) even during the cycles where the
-        rebooting peer's vote has aged out of its registry.
+      - [x] **Simultaneous power-cycle — verified live 2026-09-01, EUD3+EUD4
+        concurrent boot (PR #30, commit `5ce5cb5`).** Both booted within
+        ~7 minutes of each other (effectively concurrent relative to the
+        ~3min `acsCycleInterval`), both hit `electColdStart` immediately
+        with no deadlock and no repeat of the old "holding forever"
+        symptom. Initial picks briefly diverged on 2.4GHz (EUD4 → ch11
+        from its own bias/scan, EUD3 → ch6 from its own) while 5GHz
+        matched from cold start on both (ch149/5745MHz) — the divergent
+        band self-corrected at EUD3's next periodic cycle (~2.5min later)
+        once EUD4's vote gossiped in, confirmed by direct `iw dev` re-query
+        showing both nodes on identical channels on both bands, and
+        `batctl n`/`o` (via `sudo`) showing real batman-adv peering over
+        both wlan0 and wlan1, not just interfaces up. EUD1/EUD2 (HaLow-only,
+        no 2.4/5GHz mesh radio) don't exercise this path and were still on
+        the pre-fix build at test time — not part of this verification,
+        need a routine update before they can be.
+      - [x] **Converged node loses a peer — verified live 2026-09-01,
+        EUD4 while EUD3 was powered off (not just rebooted).** `batctl`
+        showed EUD3 gone from the data plane almost immediately, but its
+        registry vote stayed `ACTIVE` for the full `staleNodeThreshold`
+        (600s) before aging out — a real ~10min lag between batman losing
+        the peer and ACS's vote aging out, by design, not a bug. Once the
+        vote actually aged out, both bands logged the plain `no peer
+        votes yet (cold start or isolated) — holding current channel`
+        line, never `electColdStart`'s scored-election line — correct,
+        since EUD4's live channels (2462/5745) never equaled the lobby
+        frequency. `iw dev` confirmed both radios held their exact
+        channel throughout, zero `wpa_supplicant`/`node-manager`
+        restarts. Also confirmed no quorum-driven lobby retreat occurred
+        (EUD4 still had 2 other batman originators via HaLow, so
+        `quorumOK`'s solo-isolation branch never triggered) — this
+        exercised the cold-start-hold gate specifically, not the separate
+        quorum-retreat path.
       - A bias-eligible channel that scores clearly worse (>4dB) than an
         alternative real candidate: confirm the alternative still wins —
         i.e. the nudge is bounded, not an override.
-      - Kill/corrupt `/var/lib/mesh_acs_last_channels` (truncate mid-line,
-        write non-numeric garbage) and confirm a log line appears and
-        behavior degrades cleanly to the undirected local-noise pick.
-      - Force `rewriteFrequencyLine`'s conf write to fail (e.g. make the
-        conf path read-only) on a cycle that would otherwise persist, and
-        confirm the last-known-good file is *not* updated with a
-        frequency the radio never actually reached.
+      - [x] **Corrupted persisted-state file — verified live 2026-09-01,
+        EUD4.** Overwrote `/var/lib/mesh_acs_last_channels` with
+        `LAST_FREQ_2_4=garbage`, `LAST_FREQ_5_0=` (empty),
+        `TIMESTAMP=notanumber`. Next cycle logged each field individually
+        (`persisted last-elected channels: LAST_FREQ_2_4="garbage"
+        unparseable, ignoring`, same for the other two), election
+        proceeded normally in the same cycle with no crash and no restart
+        loop (`systemctl is-active` stayed `active` throughout). Restored
+        to original content, confirmed byte-identical afterward.
+      - [x] **Forced conf-write failure — verified live 2026-09-01, EUD4,
+        two attempts.** First attempt (`chmod 444` on
+        `wpa_supplicant-wlan1.conf`) was a false negative: `node-manager`
+        runs as root with no `User=` directive, so root bypassed the
+        permission bits entirely and the write silently succeeded —
+        proved nothing. Retried with `chattr +i` (immutable attribute),
+        which does block root; confirmed blocked via a direct `sudo`
+        write attempt returning `Operation not permitted` before touching
+        node-manager. With a real frequency mismatch forced into the conf
+        (5745→5805) and the file immutable, three consecutive cycles
+        logged `rewrite 5 GHz (ACS) frequency: write
+        .../wpa_supplicant-wlan1.conf: open ...: operation not
+        permitted` — the new error path fires, not swallowed.
+        `/var/lib/mesh_acs_last_channels` stayed at `LAST_FREQ_5_0=5745`
+        unchanged across all three failed-write cycles — it never
+        recorded 5805, the frequency the radio never actually reached,
+        which is the exact invariant this fix exists to hold. Live radio
+        (`iw dev wlan1 info`) stayed at the real 5745 MHz throughout,
+        since the disk write failed before any `wpa_supplicant` restart
+        was attempted. `node-manager` had 0 restarts and stayed `active`
+        the whole test. Fully restored (`chattr -i`, original content
+        rewritten, md5sum-verified byte-identical) and confirmed clean on
+        one more post-restore cycle.
       Historical context on the deletion/re-supersession this re-opens:
 - [x] **Cold-boot bias fix (`mesh_acs_last_channels`), 2026-08-28 through
       2026-08-30 history** — **an external review of this doc (a
