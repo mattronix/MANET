@@ -266,6 +266,16 @@ systemctl disable apt-daily-upgrade.timer > /dev/null 2>&1
 # This was hanging on boot, disable it
 systemctl mask dev-zram0.device > /dev/null 2>&1
 
+# Audio stack is only needed with an OpenVLM PTT dongle (a USB HID+audio
+# device). On a headless node without one, the stock per-user pulseaudio and
+# the Bluetooth mpris-proxy bridge just respawn on every login and spin the
+# CPU (each SSH session restarts them), driving the die temp up for nothing.
+# mesh-voice talks to the VLM's audio over ALSA directly and only once its
+# HID device is detected, so pulseaudio is never required; nothing here uses
+# Bluetooth either. Mask both for all users — a VLM-equipped node still gets
+# voice via mesh-voice's own ALSA path.
+systemctl --global mask pulseaudio.service pulseaudio.socket mpris-proxy.service > /dev/null 2>&1
+
 
 
 # Load batman-adv module at boot
