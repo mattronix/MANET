@@ -55,7 +55,7 @@ git fetch upstream
 
 ## Last reviewed
 
-Upstream commit reviewed up to: `515a3b1` (2026-08-31) — "Bump to 0.544"
+Upstream commit reviewed up to: `0f9280e` (2026-09-06) — "wording edits"
 
 ### 2026-08-21 pass (up to `695ca46`)
 
@@ -145,6 +145,79 @@ prep (`ec5346c`, not reviewed in depth).
 **Skipped as low value:** Windows/rpi-imager fixes, the removed RPi5
 release workflow (RPi5 is a later-stage target per project priorities),
 decorative UI tweaks, and ~12 version-bump-only commits.
+
+### 2026-09-06 pass (covers `515a3b1..0f9280e`, ~40 commits)
+
+Found one **real hardware bug, fixed this pass**: `27b0298` "Put USB back on
+the DWC2 host controller instead of the 2711 XHCI" (later corrected for a
+section-detection bug by `a1c1f59`). The stock CM4 image runs USB off the
+2711 built-in XHCI controller (`otg_mode=1` in `[cm4]`), which upstream found
+does not provide a working USB host controller on their hardware — no root
+hub, so a USB MM81xx HaLow card never enumerates, so no mesh. The fix
+comments out `otg_mode=1` and inserts `dtoverlay=dwc2,dr_mode=host` in the
+same `[cm4]` section (section-aware, since the stock config also carries an
+identical dwc2 line under `[cm5]` that a file-wide grep would false-match).
+
+This directly applies to the fork: `firstrun.sh.template` already detects a
+USB MM81xx HaLow card via sysfs (`_halow_on_spi=0` path,
+`MANET/provisioning/firstrun.sh.template:283-300`) and skips the SPI-hat
+`config.txt` plumbing for it — but never had *any* CM4 DWC2/otg_mode
+handling, on either side of the fork's 2026-08-11 split. `27b0298` landed
+2026-08-30, inside the range the 2026-09-01 pass already covered, but wasn't
+individually caught — it fell into that pass's "Windows/rpi-imager, skipped
+as low value" bucket by association with the surrounding flasher-rewrite
+commits, when it's actually a `firstrun.sh.template` provisioning fix
+unrelated to the flasher GUI. **Ported 2026-09-06** (final, section-aware
+form) directly onto `MANET/provisioning/firstrun.sh.template`, right after
+the existing `[cm4]` `pcie-32bit-dma` block. Not yet hardware-verified on a
+CM4 + USB MM81xx board — our fleet's HaLow boards have all been SPI/Seeed-HAT
+so far (see `[[halow_spi_clock_speed_fix]]`), so this path has had no live
+coverage either upstream's way or ours.
+
+Also checked, no action needed:
+- `06e462b` "Document how a node discovers claimed IP chunks via Alfred" —
+  docs-only on upstream's old `node_tools/README.md`, describing the
+  claimed-chunk allocation invariants (random pick, 300s stale timeout,
+  persisted state overrides live registry data to avoid false-conflict
+  churn). Cross-checked against the fork's Go `mesh-manager`
+  (`MANET/src/mesh-manager/main.go`, `ipManager.run()` ~line 453-535): the Go
+  implementation already matches this invariant exactly — a valid persisted
+  chunk (`im.pValid`) is reasserted directly without consulting
+  `claimed_chunks.txt` (`usePersistent` gate at line 503). Confirms the
+  design is correct; no gap.
+- `92ae222`/`45faf87`/`bfcbb34`/`8d60d0b` (openvlm/Lyra voice pipeline
+  work, ~5 commits) — Python/GStreamer/Lyra, architecturally unrelated to
+  the fork's own Go `mesh-voice` (Opus-based). `45faf87` is a real bug
+  pattern worth knowing about even though it's not portable code: adapted
+  loss-recovery state (frames-per-packet) was being silently reset to the
+  configured default whenever the GStreamer pipeline rebuilt on a SIGHUP
+  retune, and cumulative loss counters weren't reset alongside it, producing
+  a bogus negative delta right after retune. Worth checking for an analogous
+  "adaptive state clobbered by pipeline/session rebuild" bug in the fork's
+  Go mesh-voice *if* a feature-by-feature comparison is ever prioritized
+  (still an open item from the 2026-09-01 pass, not resolved this pass
+  either).
+- `build-cm4-tarball.sh` / `build-r3a-tarball.sh` / `build-rpi5-tarball.sh` —
+  one-line `openvlm` binary packaging additions, N/A (same Lyra-voice
+  architecture boundary as above).
+
+**New idea, not implemented — needs a product decision, not a port:** the
+Windows flasher gained an "additional scripts" feature (new
+`provisioning/additional-scripts/` dir + GUI checks: syntax-check scripts
+before running them, measure real script size instead of trusting the
+directory entry, auto-correct CRLF-mangled Windows-authored scripts instead
+of rejecting them, size list columns to content). The fork has no equivalent
+— nothing under `MANET/provisioning/` runs arbitrary user-supplied setup
+scripts during provisioning today. This is a genuinely new capability
+(let an installer bundle custom node setup steps), not a bugfix, so it
+wasn't ported; flag if there's a use case for user-extensible provisioning.
+
+**Skipped as low value, consistent with prior passes:** the rest of the
+Windows GUI flasher rewrite (~30 commits: DPI scaling, rpiboot visibility,
+progress bars, quoting fixes, build-stamp display, settings-page defaults) —
+the fork's own `windows.ps1`/`linux.sh`/`mac.sh` are independent
+implementations, not upstream's rpi-imager-wrapper GUI. US-spelling and
+version-bump-only commits.
 
 Update this line after each review pass so `git log upstream/main --oneline
 <last-reviewed-sha>..upstream/main` shows only what's new.
